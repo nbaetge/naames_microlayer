@@ -1,0 +1,240 @@
+---
+title: "Microlayer"
+author: "Nicholas Baetge"
+date: "5/25/2020"
+output: github_document
+---
+
+```{r message = F, warning = F}
+library(tidyverse) 
+library(googledrive)
+library(googlesheets4)
+library(rmarkdown)
+library(knitr)
+library(readxl)
+library(data.table) 
+library(scales)
+library(zoo)
+library(oce)
+library(patchwork)
+#rmarkdown tables
+library(stargazer)
+library(pander)
+library(growthcurver)
+#stat tests
+library(lmtest)
+library(lmodel2)
+library(rstatix)
+library(ggpubr)
+```
+
+```{r include = FALSE}
+custom_theme <- function() {
+  theme_test(base_size = 16) %+replace%
+    theme(legend.position = "top",
+          legend.title = element_blank(),
+          legend.spacing.x = unit(0.5,"cm"),
+          legend.background = element_rect(fill = "transparent",colour = NA),
+          legend.key = element_rect(fill = "transparent",colour = NA),
+          panel.background = element_rect(fill = "transparent",colour = NA),
+          plot.background = element_rect(fill = "transparent",colour = NA),
+          strip.text.x = element_text(size = 14, color = "white", face = "bold.italic"),
+          strip.text.y = element_text(size = 14, color = "white", face = "bold.italic", angle = 270),
+          strip.background = element_rect(color = "black", fill = "#005a9c", size = 0.5, linetype = "solid")) 
+}
+
+custom_theme_linedraw <- function() {
+  theme_linedraw(base_size = 16) %+replace%
+    theme(legend.position = "top",
+          legend.title = element_blank(),
+          legend.spacing.x = unit(0.5,"cm"),
+          legend.background = element_rect(fill = "transparent",colour = NA),
+          legend.key = element_rect(fill = "transparent",colour = NA),
+          panel.background = element_rect(fill = "transparent",colour = NA),
+          plot.background = element_rect(fill = "transparent",colour = NA),
+          strip.text.x = element_text(size = 14, color = "white", face = "bold.italic"),
+          strip.text.y = element_text(size = 14, color = "white", face = "bold.italic", angle = 270),
+          strip.background = element_rect(color = "black", fill = "#005a9c", size = 0.5, linetype = "solid")) 
+}
+
+custom.colors <- c("AT39" = "#377EB8", "AT34" = "#4DAF4A", "AT38" = "#E41A1C", "AT32" = "#FF7F00", "Temperate" = "#A6CEE3", "Subpolar" = "#377EB8", "Subtropical" = "#FB9A99", "GS/Sargasso" = "#E41A1C", "Early Spring" = "#377EB8", "Late Spring" = "#4DAF4A","Early Autumn" = "#E41A1C", "Summer" = "#E41A1C", "Late Autumn" = "#FF7F00", "A" = "#E41A1C", "B" = "#377EB8", "C" = "#4DAF4A", "D" = "#FF7F00", "E" = "#FDB927", "F" = "#552583", "G" = "#FDB927", "H" = "#552583",   "Control" = "#E41A1C", "TW12" = "#377EB8", "T. Weissflogii 12C Exudate" = "#377EB8", "TW13" = "#4DAF4A", "T. Weissflogii 13C Exudate" = "#4DAF4A", "MixDS" = "#377EB8", "Deep Comm., Surface DOM" = "#377EB8","MixSD" = "#4DAF4A", "Surface Comm., Deep DOM" = "#4DAF4A", "SynLys" = "#377EB8", "Synechococcus Lysate" = "#377EB8", "SynExd" = "#4DAF4A", "Synechococcus Exudate" = "#4DAF4A", "TWExd" = "#FF7F00", "T. Weissflogii Exudate" = "#FF7F00", "TW5" = "#377EB8", "TW10" = "#4DAF4A", "TW20" = "#FF7F00", "Parallel" = "#377EB8", "W" = "#552583", "Whole Seawater" = "#552583", "1.2" = "#4DAF4A", "1.2 µm Filtrate" = "#4DAF4A", "NV" = "#FF7F00", "1.2 µm Filtrate: TFF Filtrate (3:7)" = "#FF7F00", "Carbon" = "#E41A1C", "Nitrogen" = "#377EB8", "+5 µmol C/L Exudate" = "#FF7F00", "+10 µmol C/L Exudate" = "#FF7F00", "+20 µmol C/L Exudate" = "#FF7F00", "Filter 1" = "#E41A1C", "Filter 2" = "#377EB8", "10 m" = "#E41A1C", "200 m" = "#377EB8", "BCD" = "#377EB8" , "NPP" = "#4DAF4A" , "Cruise Specific BGE" = "#377EB8", "Global BGE" = "#4DAF4A") 
+
+custom.shapes <- c("Early Spring" = 21, "Late Spring" = 22,"Early Autumn" = 23)
+
+custom.lines <- c("GS/Sargasso" = "blank", "Subtropical" = "solid", "Temperate" = "longdash", "Subpolar" = "dotted" )
+
+
+levels = c("GS/Sargasso", "Subtropical", "Temperate", "Subpolar",  "AT39-6", "AT34", "AT38", "AT32","South", "North", "Early Spring", "Late Spring","Early Autumn",  "Summer", "Late Autumn", "Control", "Parallel", "SynLys", "SynExd", "TWExd", "MixSD", "MixDS", "TW12", "TW13", "TW5", "TW10", "TW20",  "Surface Comm., Deep DOM", "Deep Comm., Surface DOM", "Synechococcus Exudate", "Synechococcus Lysate", "T. Weissflogii Exudate", "T. Weissflogii 12C Exudate", "T. Weissflogii 13C Exudate", "+5 µmol C/L Exudate", "+10 µmol C/L Exudate","+20 µmol C/L Exudate", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "W", "Whole Seawater","1.2", "1.2 µm Filtrate","NV", "1.2 µm Filtrate: TFF Filtrate (3:7)")
+
+```
+
+
+# Import and wrangle data
+
+## TOC and DOC from NAAMES Bottle File
+
+For the microlayer samples, we collected corresponding Total Organic Carbon and Dissolved Organic Carbon (TOC/DOC, respectively) samples six times total. In those samples, the mean offset between the two measurements was ~4% (col = ave_percent_diff). There is good agreement between the microlayer TOC and DOC samples (see section **Regressions** below) There are several samples where we only collected either TOC or DOC (lol...). So for those samples, what we've done is to apply the mean difference as a correction factor. Thus, corrected DOC values (column = DOC_corr) equals: TOC - (TOC * average percent difference between TOC and DOC) . We've added a corresponding column with numerical flags that indicate which microlayer samples have been corrected [2] and which have not [1]. The units for TOC and DOC are µmol C/L.
+
+```{r message = F, warning = F}
+google.df <- read_sheet("https://docs.google.com/spreadsheets/d/1zw-W1k__BeuJg1oQpQQ_XT7zWLiY3dfL-dTaQ0pzN5Q/edit#gid=1446474071", sheet = "Bottle File", skip = 1, col_types = "ccc?D?dddddddcdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddcccccdddddcdd") %>% 
+  #Station variable is read as numeric, so read_sheet turns station "1A" into an NA.
+  #we'll replace it with a 0
+  mutate(Station = ifelse(is.na(Station), 0, Station)) %>% 
+  mutate_at(vars(TOC, TOC_sd, DOC, DOC_sd), round, 1)
+
+microlayer <- google.df %>% 
+  filter(Cruise %in% c("AT38", "AT39-6"), Cast_Type %in% c("Microlayer")) %>% 
+  select(Cruise:Date, Latitude, Longitude, CruiseCN:Target_Z, TOC, TOC_sd, DOC, DOC_sd) %>% 
+  distinct() %>% 
+  filter(!Cruise == "AT39-6" | !Station == 2 | !SCN == 2) %>% 
+  mutate(percent_diff = round((abs((DOC - TOC)) / ((DOC + TOC)/2)) * 100, 2),
+         ave_percent_diff = round(mean(percent_diff, na.rm = T), 2),
+         DOC_corr = ifelse(is.na(DOC), round(TOC - (ave_percent_diff/100 * TOC), 1), NA),
+         DOC_corr_flag = ifelse(is.na(DOC), 2, 1)) 
+
+subsurface <- google.df %>% 
+   filter(Cruise %in% c("AT38", "AT39-6"), Cast_Type %in% c("Deep", "Flow-through"), Target_Z %in% c(0.1, 1, 5)) %>% 
+ select(Cruise:Date, Latitude, Longitude, CruiseCN:Target_Z, TOC, TOC_sd, DOC, DOC_sd) %>% 
+  distinct() %>% 
+  drop_na(DOC)
+
+doc_toc <- bind_rows(subsurface, microlayer)  %>% 
+  arrange(Date, Time_Stamp) %>% 
+   mutate(DOC_corr = ifelse(is.na(DOC_corr), DOC, DOC_corr)) 
+
+```
+
+## Total Dissolved Amino Acids
+
+```{r}
+tdaa <- read_excel("~/naames_microlayer/Input/NAAMES_AA_Master.xlsx", sheet = 1) %>% 
+  select(-c(run, sample)) %>% 
+  mutate_at(vars(tdaa_ave:mol_per_lys), round, 2)
+```
+
+# Merge data
+
+Here we'll also calculate the % TDAA yield  (tdaa_yield): 
+
+(1) convert the carbon concentration of the TDAAs (tdaa_c_ave) from nmol C L^-1^ to µmol C L^-1^
+(2) normalize the concentration to the bulk DOC concentratation (corrected DOC values for microlayer samples in which only TOC was directly estimates): tdaa_c_ave/DOC_corr
+(3) express as percent
+
+```{r message = F}
+
+merged <- doc_toc %>% 
+  left_join(., tdaa) %>% 
+  mutate(tdaa_yield = round(((tdaa_c_ave/1000)/DOC_corr)*100, 2)) %>% 
+  drop_na(tdaa_yield) %>% 
+  arrange(Cruise, Time_Stamp)
+
+```
+
+
+# Save data
+
+```{r}
+saveRDS(merged, "~/naames_microlayer/Output/processed_microlayer.rds")
+write_csv(merged, "~/naames_microlayer/Output/processed_microlayer.csv")
+```
+
+
+
+# Regressions
+
+```{r message = F}
+microlayer.reg <- lmodel2(DOC ~ TOC, data = microlayer, nperm = 99)
+
+microlayer.reg
+```
+
+
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 6, fig.width = 6, fig.align = "center", warning = FALSE}
+microlayer  %>% 
+  drop_na(TOC) %>% 
+  drop_na(DOC) %>% 
+  ggplot(aes(x = TOC, y = DOC)) + 
+  geom_abline(aes(intercept = 0, slope = 1)) +
+  geom_abline(intercept = microlayer.reg$regression.results[3,2],
+              slope = microlayer.reg$regression.results[3,3],colour = "black", linetype = 2, size = 1) +
+  geom_errorbar(aes(ymin = DOC - DOC_sd, ymax = DOC + DOC_sd), width = 0.5, size = 0.5) +
+  geom_errorbarh(aes(xmin = TOC - TOC_sd, xmax = TOC + TOC_sd), height = 0.5, size = 0.5) +
+  geom_point( fill = "white", shape = 21, size = 2, alpha = 0.7 ) +
+  labs(x = expression(italic(paste("TOC, µmol C L"^-1))), y = expression(italic(paste("DOC, µmol C L"^-1))), caption = "Solid line represents the 1:1 line.") +
+  scale_y_continuous(breaks = pretty_breaks()) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  custom_theme() +
+  annotate( geom = "text", label = expression(atop("y = 0.88x + 11.02", paste("r"^2,"= 0.93, ", italic("p "), "<< 0.01"))), x = 135, y = 80, size = 3) +
+  theme(plot.caption = element_text(face = "italic")) 
+```
+
+# Bar plots
+
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 12, fig.width = 10, fig.align = "center", warning = FALSE}
+
+doc.plot <- merged %>% 
+  mutate(Cast_Type = ifelse(Cast_Type != "Microlayer", "Subsurface", Cast_Type)) %>% 
+  filter(!Station == 3) %>% 
+  select(Cruise, Station, Cast_Type, DOC_corr, DOC_sd ) %>% 
+  
+  ##PLOT
+  ggplot(aes(x = Station, y = DOC_corr, fill = Cast_Type)) +
+  geom_bar(position = "dodge", stat = "identity", color = "black", alpha = 1,  width = 0.5) +
+  geom_errorbar(aes(ymin = DOC_corr - DOC_sd, ymax = DOC_corr + DOC_sd), position = position_dodge(width = 0.5), stat = "identity", width = 0.1, size = 0.5) +
+  labs(x = expression(italic("")), y = expression(italic(paste("DOC, µmol C L"^-1))) ) +
+  scale_y_continuous(breaks = pretty_breaks()) +
+  custom_theme() +
+  facet_grid(~factor(Cruise, levels = levels), scales = "free") 
+  
+tdaa.plot <-  merged %>% 
+  mutate(Cast_Type = ifelse(Cast_Type != "Microlayer", "Subsurface", Cast_Type)) %>% 
+  filter(!Station == 3) %>% 
+  select(Cruise, Station, Cast_Type, tdaa_yield ) %>% 
+  
+  ##PLOT
+  ggplot(aes(x = Station, y = tdaa_yield, fill = Cast_Type)) +
+  geom_bar(position = "dodge", stat = "identity", color = "black", alpha = 1,  width = 0.5) +
+  labs(x = expression(italic("")), y = expression(italic(paste("TDAA Yield, %"))) ) +
+  scale_y_continuous(breaks = pretty_breaks()) +
+  custom_theme() +
+  facet_grid(~factor(Cruise, levels = levels), scales = "free") +
+  guides(fill = F) +
+  theme(strip.background = element_blank(), strip.text = element_blank()) 
+  
+bala_gaba.plot <-   merged %>% 
+  mutate(Cast_Type = ifelse(Cast_Type != "Microlayer", "Subsurface", Cast_Type)) %>% 
+  filter(!Station == 3) %>% 
+  select(Cruise, Station, Cast_Type, mol_per_bala_gaba, mol_per_bala_gaba_sd ) %>% 
+  
+  ##PLOT
+  ggplot(aes(x = Station, y = mol_per_bala_gaba, fill = Cast_Type)) +
+  geom_bar(position = "dodge", stat = "identity", color = "black", alpha = 1,  width = 0.5) +
+  geom_errorbar(aes(ymin = mol_per_bala_gaba - mol_per_bala_gaba_sd, ymax = mol_per_bala_gaba + mol_per_bala_gaba_sd), position = position_dodge(width = 0.5), stat = "identity", width = 0.1, size = 0.5) +
+  labs(x = expression(italic("Station")), y = expression(italic(paste("ß-Alanine & GABA, mol %"))) ) +
+  scale_y_continuous(breaks = pretty_breaks()) +
+  custom_theme() +
+  facet_grid(~factor(Cruise, levels = levels), scales = "free") +
+  guides(fill = F) +
+  theme(strip.background = element_blank(), strip.text = element_blank()) 
+
+doc.plot / tdaa.plot / bala_gaba.plot
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
